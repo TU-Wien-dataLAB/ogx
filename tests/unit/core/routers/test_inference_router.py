@@ -122,14 +122,10 @@ async def test_openai_completion_streaming_rewrites_model_id(mock_llm_routing_ta
     chunks = [chunk async for chunk in stream]
 
     assert len(chunks) == 2
-    assert [chunk.model for chunk in chunks] == [
-        "test_provider/test-llm-model",
-        "test_provider/test-llm-model",
-    ], "Streamed completion chunks should carry the requested model id, not the provider resource id"
-    assert [choice.text for chunk in chunks for choice in chunk.choices] == [
-        "Hello",
-        " world",
-    ]
+    assert [chunk.model for chunk in chunks] == ["test_provider/test-llm-model", "test_provider/test-llm-model"], (
+        "Streamed completion chunks should carry the requested model id, not the provider resource id"
+    )
+    assert [choice.text for chunk in chunks for choice in chunk.choices] == ["Hello", " world"]
 
     # The provider itself should still be called with its own resource id
     called_params = mock_provider.openai_completion.call_args.args[0]
@@ -159,9 +155,7 @@ async def test_openai_completion_streaming_empty_stream(mock_llm_routing_table):
     assert chunks == []
 
 
-async def test_openai_completion_streaming_model_id_already_correct(
-    mock_llm_routing_table,
-):
+async def test_openai_completion_streaming_model_id_already_correct(mock_llm_routing_table):
     """Chunks that already carry the fully qualified model id are passed through unchanged."""
     routing_table, mock_provider = mock_llm_routing_table
     router = InferenceRouter(routing_table=routing_table)
@@ -206,19 +200,11 @@ async def test_openai_completion_streaming_skips_none_chunks(mock_llm_routing_ta
     stream = await router.openai_completion(params)
     chunks = [chunk async for chunk in stream]
 
-    assert [chunk.model for chunk in chunks] == [
-        "test_provider/test-llm-model",
-        "test_provider/test-llm-model",
-    ]
-    assert [choice.text for chunk in chunks for choice in chunk.choices] == [
-        "Hello",
-        " world",
-    ]
+    assert [chunk.model for chunk in chunks] == ["test_provider/test-llm-model", "test_provider/test-llm-model"]
+    assert [choice.text for chunk in chunks for choice in chunk.choices] == ["Hello", " world"]
 
 
-async def test_openai_completion_streaming_propagates_provider_errors(
-    mock_llm_routing_table,
-):
+async def test_openai_completion_streaming_propagates_provider_errors(mock_llm_routing_table):
     """Errors raised by the provider mid-stream propagate to the caller after earlier chunks are delivered."""
     routing_table, mock_provider = mock_llm_routing_table
     router = InferenceRouter(routing_table=routing_table)
@@ -245,9 +231,7 @@ async def test_openai_completion_streaming_propagates_provider_errors(
     assert chunks[0].model == "test_provider/test-llm-model"
 
 
-async def test_openai_completion_non_streaming_rewrites_model_id(
-    mock_llm_routing_table,
-):
+async def test_openai_completion_non_streaming_rewrites_model_id(mock_llm_routing_table):
     """Non-streaming /v1/completions responses report the requested model id (regression guard)."""
     routing_table, mock_provider = mock_llm_routing_table
     router = InferenceRouter(routing_table=routing_table)
@@ -297,17 +281,11 @@ async def test_rerank_calls_provider_correctly(mock_routing_table):
     mock_provider.rerank.assert_called_once()
 
     call_args = mock_provider.rerank.call_args
-    assert (
-        len(call_args.args) == 1
-    ), "Provider.rerank should be called with exactly one argument"
-    assert isinstance(
-        call_args.args[0], RerankRequest
-    ), "Provider.rerank should receive a RerankRequest object"
+    assert len(call_args.args) == 1, "Provider.rerank should be called with exactly one argument"
+    assert isinstance(call_args.args[0], RerankRequest), "Provider.rerank should receive a RerankRequest object"
 
     called_request = call_args.args[0]
-    assert (
-        called_request.model == "provider-rerank-model-123"
-    ), "Model should be substituted with provider_resource_id"
+    assert called_request.model == "provider-rerank-model-123", "Model should be substituted with provider_resource_id"
 
     assert called_request.query == "test query"
     assert called_request.items == ["item1", "item2"]
@@ -324,9 +302,7 @@ def _make_chat_completion(
         id="chatcmpl-test",
         choices=[
             OpenAIChoice(
-                message=OpenAIChatCompletionResponseMessage(
-                    role="assistant", content="Hello world"
-                ),
+                message=OpenAIChatCompletionResponseMessage(role="assistant", content="Hello world"),
                 finish_reason="stop",
                 index=0,
             )
@@ -336,9 +312,7 @@ def _make_chat_completion(
     )
 
 
-def _make_chat_completion_chunk(
-    text: str, model: str = "test-llm-model"
-) -> OpenAIChatCompletionChunk:
+def _make_chat_completion_chunk(text: str, model: str = "test-llm-model") -> OpenAIChatCompletionChunk:
     """Build a minimal streaming chat completion chunk."""
     return OpenAIChatCompletionChunk(
         id="chatcmpl-test",
@@ -366,9 +340,7 @@ async def test_openai_chat_completion_non_streaming_without_store(
     router = InferenceRouter(routing_table=routing_table)
     assert router.store is None
 
-    mock_provider.openai_chat_completion = AsyncMock(
-        return_value=_make_chat_completion()
-    )
+    mock_provider.openai_chat_completion = AsyncMock(return_value=_make_chat_completion())
 
     params = OpenAIChatCompletionRequestWithExtraBody(
         model="test_provider/test-llm-model",
@@ -381,9 +353,7 @@ async def test_openai_chat_completion_non_streaming_without_store(
     assert response.model == "test_provider/test-llm-model"
     assert response.choices[0].message.content == "Hello world"
     # Provider was called with its resource id, not the fully qualified id.
-    assert (
-        mock_provider.openai_chat_completion.call_args.args[0].model == "test-llm-model"
-    )
+    assert mock_provider.openai_chat_completion.call_args.args[0].model == "test-llm-model"
 
 
 async def test_openai_chat_completion_streaming_without_store(mock_llm_routing_table):
@@ -416,9 +386,7 @@ async def test_openai_chat_completion_streaming_without_store(mock_llm_routing_t
         "test_provider/test-llm-model",
         "test_provider/test-llm-model",
     ]
-    assert [
-        "".join(c.delta.content or "" for c in chunk.choices) for chunk in chunks
-    ] == ["Hello", " world"]
+    assert ["".join(c.delta.content or "" for c in chunk.choices) for chunk in chunks] == ["Hello", " world"]
 
 
 async def test_list_chat_completions_without_store_raises_not_implemented(
@@ -442,9 +410,7 @@ async def test_get_chat_completion_without_store_raises_not_implemented(
     assert router.store is None
 
     with pytest.raises(NotImplementedError):
-        await router.get_chat_completion(
-            GetChatCompletionRequest(completion_id="chatcmpl-test")
-        )
+        await router.get_chat_completion(GetChatCompletionRequest(completion_id="chatcmpl-test"))
 
 
 async def test_list_chat_completion_messages_without_store_raises_not_implemented(
@@ -456,6 +422,4 @@ async def test_list_chat_completion_messages_without_store_raises_not_implemente
     assert router.store is None
 
     with pytest.raises(NotImplementedError):
-        await router.list_chat_completion_messages(
-            ListChatCompletionMessagesRequest(completion_id="chatcmpl-test")
-        )
+        await router.list_chat_completion_messages(ListChatCompletionMessagesRequest(completion_id="chatcmpl-test"))

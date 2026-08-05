@@ -60,12 +60,7 @@ class SampleConfig(BaseModel):
 
 
 class SampleImpl:
-    def __init__(
-        self,
-        config: SampleConfig,
-        deps: dict[Api, Any],
-        provider_spec: ProviderSpec = None,
-    ):
+    def __init__(self, config: SampleConfig, deps: dict[Api, Any], provider_spec: ProviderSpec = None):
         self.__provider_id__ = "test_provider"
         self.__provider_spec__ = provider_spec
         self.__provider_config__ = config
@@ -86,28 +81,14 @@ def make_run_config(**overrides) -> StackConfig:
             },
             stores=ServerStoresConfig(
                 metadata=KVStoreReference(backend="kv_default", namespace="registry"),
-                inference=InferenceStoreReference(
-                    backend="sql_default", table_name="inference_store"
-                ),
-                conversations=SqlStoreReference(
-                    backend="sql_default", table_name="conversations"
-                ),
+                inference=InferenceStoreReference(backend="sql_default", table_name="inference_store"),
+                conversations=SqlStoreReference(backend="sql_default", table_name="conversations"),
             ),
         ),
     )
-    register_kvstore_backends(
-        {
-            name: cfg
-            for name, cfg in storage.backends.items()
-            if cfg.type.value.startswith("kv_")
-        }
-    )
+    register_kvstore_backends({name: cfg for name, cfg in storage.backends.items() if cfg.type.value.startswith("kv_")})
     register_sqlstore_backends(
-        {
-            name: cfg
-            for name, cfg in storage.backends.items()
-            if cfg.type.value.startswith("sql_")
-        }
+        {name: cfg for name, cfg in storage.backends.items() if cfg.type.value.startswith("sql_")}
     )
     defaults = dict(
         distro_name="test_image",
@@ -208,9 +189,7 @@ async def test_resolve_impls_inference_without_store_skips_persistence():
             stores=ServerStoresConfig(
                 metadata=KVStoreReference(backend="kv_default", namespace="registry"),
                 inference=None,
-                conversations=SqlStoreReference(
-                    backend="sql_default", table_name="conversations"
-                ),
+                conversations=SqlStoreReference(backend="sql_default", table_name="conversations"),
             ),
         ),
     )
@@ -226,9 +205,7 @@ async def test_resolve_impls_inference_without_store_skips_persistence():
     sys.modules["test_module"] = mock_module
 
     with patch("ogx.core.routers.InferenceStore") as mock_inference_store:
-        impls = await resolve_impls(
-            run_config, provider_registry, dist_registry, policy={}
-        )
+        impls = await resolve_impls(run_config, provider_registry, dist_registry, policy={})
 
     mock_inference_store.assert_not_called()
 

@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# Copyright (c) The OGX Contributors.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
 """Generate recordings for test_inference_store_disabled.py against a local mock OpenAI server.
 
 Run from repo root:
@@ -33,9 +39,7 @@ from ogx.core.library_client import OGXAsLibraryClient  # noqa: E402
 from ogx.core.stack import get_stack_run_config_from_distro  # noqa: E402
 from ogx.core.testing_context import set_test_context  # noqa: E402
 
-RECORDINGS_DIR = os.path.join(
-    REPO_ROOT, "tests", "integration", "inference", "recordings"
-)
+RECORDINGS_DIR = os.path.join(REPO_ROOT, "tests", "integration", "inference", "recordings")
 
 # The exact prompts the test uses -- the recording hash depends on the body.
 TEXT_MODEL = "openai/gpt-4o"
@@ -91,9 +95,7 @@ def _stream_chunks(model: str, completion_id: str):
             "object": "chat.completion.chunk",
             "created": 0,
             "model": model,
-            "choices": [
-                {"index": 0, "delta": {"content": " world."}, "finish_reason": None}
-            ],
+            "choices": [{"index": 0, "delta": {"content": " world."}, "finish_reason": None}],
         },
         {
             "id": completion_id,
@@ -106,11 +108,9 @@ def _stream_chunks(model: str, completion_id: str):
 
 
 class MockHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
+    def do_GET(self):  # noqa: N802 Function name `do_GET` should be lowercase
         if self.path.endswith("/models"):
-            body = json.dumps(
-                {"object": "list", "data": [{"id": "gpt-4o", "object": "model"}]}
-            ).encode()
+            body = json.dumps({"object": "list", "data": [{"id": "gpt-4o", "object": "model"}]}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -120,7 +120,7 @@ class MockHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-    def do_POST(self):
+    def do_POST(self):  # noqa: N802 Function name `do_POST` should be lowercase
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length) if length else b""
         try:
@@ -229,9 +229,7 @@ def main() -> None:
             data = json.load(f)
         url = data.get("request", {}).get("url", "")
         if re.search(r"\d+\.\d+\.\d+\.\d+:\d+", url):
-            data["request"]["url"] = (
-                "https://api.openai.com/v1" + url.split("/v1", 1)[1]
-            )
+            data["request"]["url"] = "https://api.openai.com/v1" + url.split("/v1", 1)[1]
         with open(os.path.join(staged, name), "w") as f:
             json.dump(data, f, indent=2)
             f.write("\n")

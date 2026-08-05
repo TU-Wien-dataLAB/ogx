@@ -43,11 +43,7 @@ async def get_routing_table_impl(
 
 
 async def get_auto_router_impl(
-    api: Api,
-    routing_table: RoutingTable,
-    deps: dict[str, Any],
-    run_config: StackConfig,
-    policy: list[AccessRule],
+    api: Api, routing_table: RoutingTable, deps: dict[str, Any], run_config: StackConfig, policy: list[AccessRule]
 ) -> Any:
     from .inference import InferenceRouter
     from .tool_runtime import ToolRuntimeRouter

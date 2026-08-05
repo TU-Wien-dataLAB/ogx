@@ -66,24 +66,16 @@ def _base_run_config(**overrides):
 
 def test_references_require_known_backend():
     with pytest.raises(ValidationError, match="unknown backend 'missing'"):
-        _base_run_config(
-            metadata_reference=KVStoreReference(backend="missing", namespace="registry")
-        )
+        _base_run_config(metadata_reference=KVStoreReference(backend="missing", namespace="registry"))
 
 
 def test_references_must_match_backend_family():
     with pytest.raises(ValidationError, match="kv_.* is required"):
-        _base_run_config(
-            metadata_reference=KVStoreReference(
-                backend="sql_default", namespace="registry"
-            )
-        )
+        _base_run_config(metadata_reference=KVStoreReference(backend="sql_default", namespace="registry"))
 
     with pytest.raises(ValidationError, match="sql_.* is required"):
         _base_run_config(
-            inference_reference=InferenceStoreReference(
-                backend="kv_default", table_name="inference"
-            ),
+            inference_reference=InferenceStoreReference(backend="kv_default", table_name="inference"),
         )
 
 
@@ -92,10 +84,7 @@ def test_valid_configuration_passes_validation():
     stores = config.storage.stores
     assert stores.metadata is not None and stores.metadata.backend == "kv_default"
     assert stores.inference is not None and stores.inference.backend == "sql_default"
-    assert (
-        stores.conversations is not None
-        and stores.conversations.backend == "sql_default"
-    )
+    assert stores.conversations is not None and stores.conversations.backend == "sql_default"
 
 
 def test_inference_store_defaults_enabled_when_omitted():
@@ -144,9 +133,7 @@ def _default_stores_dict() -> dict[str, Any]:
     """A valid `ServerStoresConfig` serialized with only the non-inference keys."""
     return ServerStoresConfig(
         metadata=KVStoreReference(backend="kv_default", namespace="registry"),
-        conversations=SqlStoreReference(
-            backend="sql_default", table_name="conversations"
-        ),
+        conversations=SqlStoreReference(backend="sql_default", table_name="conversations"),
     ).model_dump(mode="python")
 
 
@@ -162,9 +149,7 @@ def test_default_backends_resolve_env_vars(backend_key, monkeypatch):
     monkeypatch.delenv("SQLITE_STORE_DIR", raising=False)
     config = StorageConfig()
     db_path = config.backends[backend_key].db_path
-    assert (
-        "${env." not in db_path
-    ), f"Unresolved env var syntax in default {backend_key}: {db_path}"
+    assert "${env." not in db_path, f"Unresolved env var syntax in default {backend_key}: {db_path}"
 
 
 def test_default_backends_respect_sqlite_store_dir(monkeypatch):
@@ -181,12 +166,8 @@ def test_default_backends_fallback_to_distribs_base_dir(monkeypatch):
 
     monkeypatch.delenv("SQLITE_STORE_DIR", raising=False)
     config = StorageConfig()
-    assert config.backends["kv_default"].db_path == os.path.join(
-        str(DISTRIBS_BASE_DIR), "kvstore.db"
-    )
-    assert config.backends["sql_default"].db_path == os.path.join(
-        str(DISTRIBS_BASE_DIR), "sql_store.db"
-    )
+    assert config.backends["kv_default"].db_path == os.path.join(str(DISTRIBS_BASE_DIR), "kvstore.db")
+    assert config.backends["sql_default"].db_path == os.path.join(str(DISTRIBS_BASE_DIR), "sql_store.db")
 
 
 def test_default_backends_expand_user_home(monkeypatch):
