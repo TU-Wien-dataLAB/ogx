@@ -7,7 +7,7 @@
 import inspect
 import sys
 from typing import Any, Protocol
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from pydantic import BaseModel, Field
 
@@ -60,7 +60,12 @@ class SampleConfig(BaseModel):
 
 
 class SampleImpl:
-    def __init__(self, config: SampleConfig, deps: dict[Api, Any], provider_spec: ProviderSpec = None):
+    def __init__(
+        self,
+        config: SampleConfig,
+        deps: dict[Api, Any],
+        provider_spec: ProviderSpec = None,
+    ):
         self.__provider_id__ = "test_provider"
         self.__provider_spec__ = provider_spec
         self.__provider_config__ = config
@@ -81,14 +86,28 @@ def make_run_config(**overrides) -> StackConfig:
             },
             stores=ServerStoresConfig(
                 metadata=KVStoreReference(backend="kv_default", namespace="registry"),
-                inference=InferenceStoreReference(backend="sql_default", table_name="inference_store"),
-                conversations=SqlStoreReference(backend="sql_default", table_name="conversations"),
+                inference=InferenceStoreReference(
+                    backend="sql_default", table_name="inference_store"
+                ),
+                conversations=SqlStoreReference(
+                    backend="sql_default", table_name="conversations"
+                ),
             ),
         ),
     )
-    register_kvstore_backends({name: cfg for name, cfg in storage.backends.items() if cfg.type.value.startswith("kv_")})
+    register_kvstore_backends(
+        {
+            name: cfg
+            for name, cfg in storage.backends.items()
+            if cfg.type.value.startswith("kv_")
+        }
+    )
     register_sqlstore_backends(
-        {name: cfg for name, cfg in storage.backends.items() if cfg.type.value.startswith("sql_")}
+        {
+            name: cfg
+            for name, cfg in storage.backends.items()
+            if cfg.type.value.startswith("sql_")
+        }
     )
     defaults = dict(
         distro_name="test_image",
@@ -149,3 +168,70 @@ async def test_resolve_impls_basic():
     assert impl.foo == "baz"
     assert impl.__provider_id__ == "sample_provider"
     assert impl.__provider_spec__ == provider_spec
+
+
+async def test_resolve_impls_inference_without_store_skips_persistence():
+    """An absent inference store reference must not construct an InferenceStore.
+
+    When `storage.stores.inference` is None, the auto-router factory skips
+    constructing (and initializing) the InferenceStore entirely and builds the
+    InferenceRouter with no store dependency. No table is created and no
+    background write workers are started, so no chat completion payload is ever
+    persisted.
+    """
+    provider_spec = InlineProviderSpec(
+        api=Api.inference,
+        provider_type="sample",
+        module="test_module",
+        config_class="test_resolver.SampleConfig",
+        api_dependencies=[],
+    )
+
+    provider_registry = {Api.inference: {provider_spec.provider_type: provider_spec}}
+
+    run_config = make_run_config(
+        distro_name="test_image",
+        providers={
+            "inference": [
+                Provider(
+                    provider_id="sample_provider",
+                    provider_type="sample",
+                    config=SampleConfig.sample_run_config(),
+                )
+            ]
+        },
+        storage=StorageConfig(
+            backends={
+                "kv_default": SqliteKVStoreConfig(db_path=":memory:"),
+                "sql_default": SqliteSqlStoreConfig(db_path=":memory:"),
+            },
+            stores=ServerStoresConfig(
+                metadata=KVStoreReference(backend="kv_default", namespace="registry"),
+                inference=None,
+                conversations=SqlStoreReference(
+                    backend="sql_default", table_name="conversations"
+                ),
+            ),
+        ),
+    )
+
+    dist_registry = MagicMock()
+
+    mock_module = MagicMock()
+    impl = SampleImpl(SampleConfig(foo="baz"), {}, provider_spec)
+    add_protocol_methods(SampleImpl, Inference)
+
+    mock_module.get_provider_impl = AsyncMock(return_value=impl)
+    mock_module.get_provider_impl.__text_signature__ = "()"
+    sys.modules["test_module"] = mock_module
+
+    with patch("ogx.core.routers.InferenceStore") as mock_inference_store:
+        impls = await resolve_impls(
+            run_config, provider_registry, dist_registry, policy={}
+        )
+
+    mock_inference_store.assert_not_called()
+
+    router = impls[Api.inference]
+    assert isinstance(router, InferenceRouter)
+    assert router.store is None

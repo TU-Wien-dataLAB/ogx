@@ -43,7 +43,11 @@ async def get_routing_table_impl(
 
 
 async def get_auto_router_impl(
-    api: Api, routing_table: RoutingTable, deps: dict[str, Any], run_config: StackConfig, policy: list[AccessRule]
+    api: Api,
+    routing_table: RoutingTable,
+    deps: dict[str, Any],
+    run_config: StackConfig,
+    policy: list[AccessRule],
 ) -> Any:
     from .inference import InferenceRouter
     from .tool_runtime import ToolRuntimeRouter
@@ -60,16 +64,19 @@ async def get_auto_router_impl(
     api_to_dep_impl = {}
     # TODO: move pass configs to routers instead
     if api == Api.inference:
+        # An absent inference store reference disables chat completion
+        # persistence: no store is constructed, no table is created, and no
+        # background write workers are started. The inference router handles a
+        # missing store (it guards every write and raises NotImplementedError
+        # on the history endpoints), mirroring the optional Responses store.
         inference_ref = run_config.storage.stores.inference
-        if not inference_ref:
-            raise ValueError("storage.stores.inference must be configured in run config")
-
-        inference_store = InferenceStore(
-            reference=inference_ref,
-            policy=policy,
-        )
-        await inference_store.initialize()
-        api_to_dep_impl["store"] = inference_store
+        if inference_ref:
+            inference_store = InferenceStore(
+                reference=inference_ref,
+                policy=policy,
+            )
+            await inference_store.initialize()
+            api_to_dep_impl["store"] = inference_store
     elif api == Api.vector_io:
         api_to_dep_impl["vector_stores_config"] = run_config.vector_stores
         api_to_dep_impl["inference_api"] = deps.get(Api.inference)

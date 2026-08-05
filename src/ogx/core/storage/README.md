@@ -54,3 +54,22 @@ The tenancy mode is set process-wide during startup via `set_default_tenancy_mod
 Storage is configured in `StackConfig.storage` via `StorageConfig`. The `stores` field contains typed references (`KVStoreReference`, `SqlStoreReference`, `InferenceStoreReference`) that point to specific backend configurations.
 
 See `datatypes.py` for all config types and `StorageBackendType` for the enum of supported backends.
+
+### Optional Stores (null to disable)
+
+Some store references are optional: setting the reference to `null` (not omitting
+it) means OGX does not construct the store at all, and the API that depends on
+it degrades gracefully. This is an explicit operator choice made in a run config;
+the default for every optional reference remains an enabled reference, so
+existing deployments are unaffected unless they opt in.
+
+- **`inference`** -- when `null`, no `InferenceStore` is constructed: no
+  `inference_store` table is created and no background write workers run. Chat
+  completions still work (streaming and non-streaming); the chat completion
+  history endpoints (`list`, `retrieve`, `messages`) report that persistence is
+  not configured (HTTP 501) rather than returning an empty list or a 404.
+- **`responses`** -- the Responses store already follows the same pattern.
+
+Other stores (`datasets`, `eval`, `files`, `prompts`, `vector_io`) are not
+affected by disabling the inference store, so persistence can be turned off for
+one API independently of the rest of the storage layer.
