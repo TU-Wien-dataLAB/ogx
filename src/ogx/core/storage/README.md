@@ -60,15 +60,22 @@ See `datatypes.py` for all config types and `StorageBackendType` for the enum of
 Some store references are optional: setting the reference to `null` (not omitting
 it) means OGX does not construct the store at all, and the API that depends on
 it degrades gracefully. This is an explicit operator choice made in a run config;
-the default for every optional reference remains an enabled reference, so
-existing deployments are unaffected unless they opt in.
+the default for every optional reference remains an enabled reference (except
+`responses`, which defaults to `None`), so existing deployments are unaffected
+unless they opt in.
 
 - **`inference`** -- when `null`, no `InferenceStore` is constructed: no
   `inference_store` table is created and no background write workers run. Chat
   completions still work (streaming and non-streaming); the chat completion
   history endpoints (`list`, `retrieve`, `messages`) report that persistence is
   not configured (HTTP 501) rather than returning an empty list or a 404.
-- **`responses`** -- the Responses store already follows the same pattern.
+- **`responses`** -- the `responses` reference is nullable in the config schema
+  (`default=None`) and `null` passes validation, but unlike `inference` it is not
+  a runtime toggle: the built-in responses provider always constructs and
+  initializes its store from its own `persistence.responses` (a required,
+  non-nullable reference), and the shared `storage.stores.responses` reference
+  is only validated, never consumed at startup. Setting it to `null` is accepted
+  but does not currently disable Responses persistence.
 
 Other stores (`datasets`, `eval`, `files`, `prompts`, `vector_io`) are not
 affected by disabling the inference store, so persistence can be turned off for
