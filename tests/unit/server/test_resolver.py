@@ -151,7 +151,7 @@ async def test_resolve_impls_basic():
     assert impl.__provider_spec__ == provider_spec
 
 
-async def test_resolve_impls_inference_without_store_skips_persistence():
+async def test_resolve_impls_inference_without_store_skips_persistence() -> None:
     """An absent inference store reference must not construct an InferenceStore.
 
     When `storage.stores.inference` is None, the auto-router factory skips

@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Shared constants for the inference-store-disabled tests and their recording generator.
+"""Shared support for the inference-store-disabled tests and recording generator.
 
 The recording harness keys recordings by a SHA256 hash of the request body and the
 pytest node id, so the model id, prompts, and node ids MUST match between
@@ -12,6 +12,9 @@ pytest node id, so the model id, prompts, and node ids MUST match between
 ``scripts/gen_inference_store_disabled_recordings.py``. Keeping them in one module
 prevents silent drift between the test and its regenerable recordings.
 """
+
+from ogx.core.datatypes import StackConfig
+from ogx.core.stack import get_stack_run_config_from_distro
 
 TEXT_MODEL = "openai/gpt-4o"
 
@@ -29,3 +32,13 @@ RETRIEVE_TEST = f"{TEST_MODULE}::test_retrieve_chat_completion_reports_not_confi
 MESSAGES_TEST = f"{TEST_MODULE}::test_list_chat_completion_messages_reports_not_configured"
 
 RECORDING_TEST_IDS = [NON_STREAMING_TEST, STREAMING_TEST, RETRIEVE_TEST, MESSAGES_TEST]
+
+
+def build_inference_store_disabled_run_config() -> StackConfig:
+    """Build the minimal ci-tests configuration used by this test scenario."""
+    run_config = get_stack_run_config_from_distro("ci-tests")
+    run_config.storage.stores.inference = None
+    # Vector-store model validation is unrelated to chat completion persistence
+    # and loads the sentence-transformers stack during an in-process boot.
+    run_config.vector_stores = None
+    return run_config

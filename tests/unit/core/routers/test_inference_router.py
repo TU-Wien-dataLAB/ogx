@@ -16,6 +16,7 @@ Specific Tests:
 - test_rerank_calls_provider_correctly: Validates the router calls provider.rerank() with correct RerankRequest
 """
 
+from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -329,8 +330,8 @@ def _make_chat_completion_chunk(text: str, model: str = "test-llm-model") -> Ope
 
 
 async def test_openai_chat_completion_non_streaming_without_store(
-    mock_llm_routing_table,
-):
+    mock_llm_routing_table: tuple[MagicMock, MagicMock],
+) -> None:
     """A non-streaming chat completion succeeds when persistence is disabled (no store).
 
     The completion is returned to the caller with the requested model id and the
@@ -356,7 +357,9 @@ async def test_openai_chat_completion_non_streaming_without_store(
     assert mock_provider.openai_chat_completion.call_args.args[0].model == "test-llm-model"
 
 
-async def test_openai_chat_completion_streaming_without_store(mock_llm_routing_table):
+async def test_openai_chat_completion_streaming_without_store(
+    mock_llm_routing_table: tuple[MagicMock, MagicMock],
+) -> None:
     """A streaming chat completion streams normally when persistence is disabled.
 
     Chunks are rewritten to carry the requested model id and the router never
@@ -366,7 +369,7 @@ async def test_openai_chat_completion_streaming_without_store(mock_llm_routing_t
     router = InferenceRouter(routing_table=routing_table)
     assert router.store is None
 
-    async def provider_stream():
+    async def provider_stream() -> AsyncIterator[OpenAIChatCompletionChunk]:
         yield _make_chat_completion_chunk("Hello")
         yield _make_chat_completion_chunk(" world")
 
@@ -390,8 +393,8 @@ async def test_openai_chat_completion_streaming_without_store(mock_llm_routing_t
 
 
 async def test_list_chat_completions_without_store_raises_not_implemented(
-    mock_llm_routing_table,
-):
+    mock_llm_routing_table: tuple[MagicMock, MagicMock],
+) -> None:
     """The list history endpoint reports an error (not an empty list) when persistence is off."""
     routing_table, _ = mock_llm_routing_table
     router = InferenceRouter(routing_table=routing_table)
@@ -402,8 +405,8 @@ async def test_list_chat_completions_without_store_raises_not_implemented(
 
 
 async def test_get_chat_completion_without_store_raises_not_implemented(
-    mock_llm_routing_table,
-):
+    mock_llm_routing_table: tuple[MagicMock, MagicMock],
+) -> None:
     """The retrieve history endpoint reports an error (not a 404) when persistence is off."""
     routing_table, _ = mock_llm_routing_table
     router = InferenceRouter(routing_table=routing_table)
@@ -414,8 +417,8 @@ async def test_get_chat_completion_without_store_raises_not_implemented(
 
 
 async def test_list_chat_completion_messages_without_store_raises_not_implemented(
-    mock_llm_routing_table,
-):
+    mock_llm_routing_table: tuple[MagicMock, MagicMock],
+) -> None:
     """The messages history endpoint reports an error when persistence is off, consistent with list/retrieve."""
     routing_table, _ = mock_llm_routing_table
     router = InferenceRouter(routing_table=routing_table)

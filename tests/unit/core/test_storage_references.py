@@ -87,7 +87,7 @@ def test_valid_configuration_passes_validation():
     assert stores.conversations is not None and stores.conversations.backend == "sql_default"
 
 
-def test_inference_store_defaults_enabled_when_omitted():
+def test_inference_store_defaults_enabled_when_omitted() -> None:
     """Omitting the `inference` key keeps persistence enabled (backward compatible default).
 
     The optional typing on `ServerStoresConfig.inference` means `None` is a valid,
@@ -102,13 +102,13 @@ def test_inference_store_defaults_enabled_when_omitted():
     assert stores.inference.table_name == "inference_store"
 
 
-def test_inference_store_none_disables_persistence():
+def test_inference_store_none_disables_persistence() -> None:
     """Setting `inference` to null explicitly opts out of chat completion persistence."""
     stores = ServerStoresConfig(inference=None)
     assert stores.inference is None
 
 
-def test_inference_store_config_omit_vs_null_parsing():
+def test_inference_store_config_omit_vs_null_parsing() -> None:
     """Lock the omit-vs-null semantics at the StackConfig parsing level.
 
     - `inference` key absent  -> enabled default (persistence on)

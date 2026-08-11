@@ -66,7 +66,7 @@ async def get_auto_router_impl(
         # missing store (it guards every write and raises NotImplementedError
         # on the history endpoints), mirroring the optional Responses store.
         inference_ref = run_config.storage.stores.inference
-        if inference_ref:
+        if inference_ref is not None:
             inference_store = InferenceStore(
                 reference=inference_ref,
                 policy=policy,

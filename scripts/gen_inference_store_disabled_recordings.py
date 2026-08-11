@@ -28,7 +28,10 @@ import shutil
 import sys
 import tempfile
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 
 import yaml
 
@@ -36,14 +39,14 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
 sys.path.insert(0, REPO_ROOT)
 
-from ogx.core.library_client import OGXAsLibraryClient  # noqa: E402
-from ogx.core.stack import get_stack_run_config_from_distro  # noqa: E402
-from ogx.core.testing_context import set_test_context  # noqa: E402
-from tests.integration.inference.store_disabled_constants import (  # noqa: E402
+from ogx.core.library_client import OGXAsLibraryClient  # noqa: E402  # Requires local checkout path setup above.
+from ogx.core.testing_context import set_test_context  # noqa: E402  # Requires local checkout path setup above.
+from tests.integration.inference.store_disabled_support import (  # noqa: E402  # Requires path setup above.
     NON_STREAMING_PROMPT,
     RECORDING_TEST_IDS,
     STREAMING_PROMPT,
     TEXT_MODEL,
+    build_inference_store_disabled_run_config,
 )
 
 RECORDINGS_DIR = os.path.join(REPO_ROOT, "tests", "integration", "inference", "recordings")
@@ -55,7 +58,7 @@ MOCK_HOST = "127.0.0.1"
 MOCK_PORT = 0  # ephemeral
 
 
-def _completion_body(model: str, prompt: str, completion_id: str) -> dict:
+def _completion_body(model: str, prompt: str, completion_id: str) -> dict[str, Any]:
     return {
         "id": completion_id,
         "object": "chat.completion",
@@ -72,7 +75,7 @@ def _completion_body(model: str, prompt: str, completion_id: str) -> dict:
     }
 
 
-def _stream_chunks(model: str, completion_id: str):
+def _stream_chunks(model: str, completion_id: str) -> list[dict[str, Any]]:
     return [
         {
             "id": completion_id,
@@ -105,7 +108,7 @@ def _stream_chunks(model: str, completion_id: str):
 
 
 class MockHandler(BaseHTTPRequestHandler):
-    def do_GET(self):  # noqa: N802 Function name `do_GET` should be lowercase
+    def do_GET(self) -> None:  # noqa: N802 Function name `do_GET` should be lowercase
         if self.path.endswith("/models"):
             body = json.dumps({"object": "list", "data": [{"id": "gpt-4o", "object": "model"}]}).encode()
             self.send_response(200)
@@ -117,13 +120,14 @@ class MockHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-    def do_POST(self):  # noqa: N802 Function name `do_POST` should be lowercase
+    def do_POST(self) -> None:  # noqa: N802 Function name `do_POST` should be lowercase
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length) if length else b""
         try:
-            payload = json.loads(raw) if raw else {}
-        except Exception:
-            payload = {}
+            decoded_payload = json.loads(raw) if raw else {}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            decoded_payload = {}
+        payload = decoded_payload if isinstance(decoded_payload, dict) else {}
         stream = payload.get("stream", False)
         model = payload.get("model", "gpt-4o")
         completion_id = "chatcmpl-mock-recording"
@@ -132,8 +136,8 @@ class MockHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
-            for ch in chunks:
-                self.wfile.write(f"data: {json.dumps(ch)}\n\n".encode())
+            for chunk in chunks:
+                self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
                 self.wfile.flush()
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
@@ -146,18 +150,24 @@ class MockHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
 
-    def log_message(self, *args):  # silence
+    def log_message(self, format: str, *args: Any) -> None:  # silence
         pass
 
 
-def start_mock_server() -> HTTPServer:
+@contextmanager
+def _mock_server() -> Iterator[HTTPServer]:
     server = HTTPServer((MOCK_HOST, MOCK_PORT), MockHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    return server
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
 
 
-async def run(test_id: str, config_path: str) -> None:
+async def _run(test_id: str, config_path: str) -> None:
     set_test_context(test_id)
     client = OGXAsLibraryClient(config_path, skip_logger_removal=True)
     try:
@@ -177,70 +187,72 @@ async def run(test_id: str, config_path: str) -> None:
         client.shutdown()
 
 
+def _stage_recordings(staged_dir: str) -> int:
+    """Copy generated chat recordings to staging and normalize their provider URLs."""
+    for name in os.listdir(RECORDINGS_DIR):
+        if not name.endswith(".json") or name.startswith("models-"):
+            continue
+        source = os.path.join(RECORDINGS_DIR, name)
+        with open(source, encoding="utf-8") as file:
+            data = json.load(file)
+        url = data.get("request", {}).get("url", "")
+        if re.search(r"\d+\.\d+\.\d+\.\d+:\d+", url):
+            data["request"]["url"] = "https://api.openai.com/v1" + url.split("/v1", 1)[1]
+        with open(os.path.join(staged_dir, name), "w", encoding="utf-8") as file:
+            json.dump(data, file, indent=2)
+            file.write("\n")
+    return len(os.listdir(staged_dir))
+
+
+def _generate_recordings(config_file: str) -> int:
+    """Generate recordings while preserving the repository's existing fixtures."""
+    recordings_parent = os.path.dirname(RECORDINGS_DIR)
+    with (
+        tempfile.TemporaryDirectory(prefix=".recordings-backup-", dir=recordings_parent) as backup_dir,
+        tempfile.TemporaryDirectory(prefix="ogx-staged-") as staged_dir,
+    ):
+        original_recordings = os.path.join(backup_dir, "recordings")
+        had_original_recordings = os.path.isdir(RECORDINGS_DIR)
+        if had_original_recordings:
+            shutil.move(RECORDINGS_DIR, original_recordings)
+
+        try:
+            for test_id in TEST_NODE_IDS:
+                print(f"recording for {test_id} ...")
+                asyncio.run(_run(test_id, config_file))
+            n_written = _stage_recordings(staged_dir)
+        finally:
+            shutil.rmtree(RECORDINGS_DIR, ignore_errors=True)
+            if had_original_recordings:
+                shutil.move(original_recordings, RECORDINGS_DIR)
+
+        os.makedirs(RECORDINGS_DIR, exist_ok=True)
+        for name in os.listdir(staged_dir):
+            shutil.copy2(os.path.join(staged_dir, name), os.path.join(RECORDINGS_DIR, name))
+        return n_written
+
+
 def main() -> None:
     os.environ["OGX_TEST_INFERENCE_MODE"] = "record"
     os.environ["OGX_LOGGING"] = "all=warning"
     os.environ["OPENAI_API_KEY"] = "fake-key-for-replay"
-    sqlite_dir = tempfile.mkdtemp(prefix="ogx-record-")
-    os.environ["SQLITE_STORE_DIR"] = sqlite_dir
 
-    server = start_mock_server()
-    port = server.server_address[1]
-    mock_base = f"http://{MOCK_HOST}:{port}/v1"
-    os.environ["OPENAI_BASE_URL"] = mock_base
+    with (
+        tempfile.TemporaryDirectory(prefix="ogx-record-") as sqlite_dir,
+        tempfile.TemporaryDirectory(prefix="ogx-config-") as config_dir,
+        _mock_server() as server,
+    ):
+        os.environ["SQLITE_STORE_DIR"] = sqlite_dir
+        port = server.server_address[1]
+        os.environ["OPENAI_BASE_URL"] = f"http://{MOCK_HOST}:{port}/v1"
 
-    run_config = get_stack_run_config_from_distro("ci-tests")
-    run_config.storage.stores.inference = None
-    run_config.vector_stores = None
+        run_config = build_inference_store_disabled_run_config()
+        config_file = os.path.join(config_dir, "run.yaml")
+        with open(config_file, "w", encoding="utf-8") as file:
+            yaml.safe_dump(run_config.model_dump(mode="json"), file)
 
-    config_file = os.path.join(tempfile.mkdtemp(), "run.yaml")
-    with open(config_file, "w") as f:
-        yaml.dump(run_config.model_dump(mode="json"), f)
+        n_written = _generate_recordings(config_file)
 
-    # Isolate recording so the shared inference recordings directory is untouched.
-    # The recorder always writes into the test file's ``recordings/`` dir (relative
-    # to CWD) when a test context is set, so move the real directory aside while
-    # recording and merge only the chat-completion recordings back afterwards.
-    backup = None
-    if os.path.isdir(RECORDINGS_DIR):
-        backup = RECORDINGS_DIR + ".bak"
-        shutil.move(RECORDINGS_DIR, backup)
-
-    try:
-        for test_id in TEST_NODE_IDS:
-            print(f"recording for {test_id} ...")
-            asyncio.run(run(test_id, config_file))
-    finally:
-        server.shutdown()
-
-    # Collect the freshly recorded chat-completion recordings (skip models-list
-    # recordings -- the test does not need them in replay mode) and rewrite their
-    # mock-host URLs to the canonical provider URL. The recording hash ignores
-    # the host, so replay works against the real provider URL.
-    staged = tempfile.mkdtemp(prefix="ogx-staged-")
-    for name in os.listdir(RECORDINGS_DIR):
-        if not name.endswith(".json") or name.startswith("models-"):
-            continue
-        src = os.path.join(RECORDINGS_DIR, name)
-        with open(src) as f:
-            data = json.load(f)
-        url = data.get("request", {}).get("url", "")
-        if re.search(r"\d+\.\d+\.\d+\.\d+:\d+", url):
-            data["request"]["url"] = "https://api.openai.com/v1" + url.split("/v1", 1)[1]
-        with open(os.path.join(staged, name), "w") as f:
-            json.dump(data, f, indent=2)
-            f.write("\n")
-
-    # Restore the original recordings directory and drop in the new recordings.
-    shutil.rmtree(RECORDINGS_DIR, ignore_errors=True)
-    if backup is not None:
-        shutil.move(backup, RECORDINGS_DIR)
-    else:
-        os.makedirs(RECORDINGS_DIR, exist_ok=True)
-    n_written = len(os.listdir(staged))
-    for name in os.listdir(staged):
-        shutil.copy2(os.path.join(staged, name), os.path.join(RECORDINGS_DIR, name))
-    shutil.rmtree(staged, ignore_errors=True)
     print(f"wrote {n_written} recordings")
     print("done")
 
