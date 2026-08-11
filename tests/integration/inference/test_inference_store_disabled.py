@@ -14,8 +14,8 @@ streaming and non-streaming requests, and the history endpoints report that
 persistence is not configured (501) rather than returning an empty list or 404.
 
 This test builds a ``StackConfig`` from the ``ci-tests`` distribution with the
-inference store reference removed, boots an in-process library client from it,
-and exercises the full HTTP path through the OpenAI-compatible client.
+inference store reference set to ``null``, boots an in-process library client
+from it, and exercises the full HTTP path through the OpenAI-compatible client.
 """
 
 import os
@@ -141,14 +141,10 @@ def test_list_chat_completions_reports_not_configured(non_persisting_client: Non
 
 
 def test_retrieve_chat_completion_reports_not_configured(non_persisting_client: NonPersistingClient) -> None:
-    """retrieve for a just-completed id raises a not-configured error rather than a 404."""
+    """retrieve raises a not-configured error rather than a 404."""
     client, _ = non_persisting_client
-    response = client.chat.completions.create(
-        model=TEXT_MODEL,
-        messages=[{"role": "user", "content": NON_STREAMING_PROMPT}],
-    )
     with pytest.raises(NotImplementedError):
-        client.chat.completions.retrieve(response.id)
+        client.chat.completions.retrieve("chatcmpl-not-persisted")
 
 
 def test_list_chat_completion_messages_reports_not_configured(
@@ -156,12 +152,8 @@ def test_list_chat_completion_messages_reports_not_configured(
 ) -> None:
     """messages raises a not-configured error, consistent with list/retrieve."""
     client, _ = non_persisting_client
-    response = client.chat.completions.create(
-        model=TEXT_MODEL,
-        messages=[{"role": "user", "content": NON_STREAMING_PROMPT}],
-    )
     with pytest.raises(NotImplementedError):
-        client.chat.completions.messages.list(completion_id=response.id)
+        client.chat.completions.messages.list(completion_id="chatcmpl-not-persisted")
 
 
 def test_no_inference_store_table_when_persistence_disabled(

@@ -60,11 +60,6 @@ async def get_auto_router_impl(
     api_to_dep_impl = {}
     # TODO: move pass configs to routers instead
     if api == Api.inference:
-        # An absent inference store reference disables chat completion
-        # persistence: no store is constructed, no table is created, and no
-        # background write workers are started. The inference router handles a
-        # missing store (it guards every write and raises NotImplementedError
-        # on the history endpoints), mirroring the optional Responses store.
         inference_ref = run_config.storage.stores.inference
         if inference_ref is not None:
             inference_store = InferenceStore(

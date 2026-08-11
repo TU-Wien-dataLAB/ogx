@@ -7,7 +7,6 @@
 """Unit tests for storage backend/reference validation."""
 
 import os
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -109,12 +108,12 @@ def test_inference_store_none_disables_persistence() -> None:
 
 
 def test_inference_store_config_omit_vs_null_parsing() -> None:
-    """Lock the omit-vs-null semantics at the StackConfig parsing level.
+    """Lock the omit-vs-null semantics when parsing `ServerStoresConfig`.
 
     - `inference` key absent  -> enabled default (persistence on)
     - `inference: null`       -> disabled (persistence off)
     """
-    base = _default_stores_dict()
+    base = ServerStoresConfig().model_dump(mode="python")
 
     # Omit the inference key entirely: the default applies (persistence on).
     omitted = dict(base)
@@ -127,14 +126,6 @@ def test_inference_store_config_omit_vs_null_parsing() -> None:
     explicit_null["inference"] = None
     stores_null = ServerStoresConfig.model_validate(explicit_null)
     assert stores_null.inference is None
-
-
-def _default_stores_dict() -> dict[str, Any]:
-    """A valid `ServerStoresConfig` serialized with only the non-inference keys."""
-    return ServerStoresConfig(
-        metadata=KVStoreReference(backend="kv_default", namespace="registry"),
-        conversations=SqlStoreReference(backend="sql_default", table_name="conversations"),
-    ).model_dump(mode="python")
 
 
 @pytest.mark.parametrize("backend_key", ["kv_default", "sql_default"])

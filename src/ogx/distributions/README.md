@@ -73,6 +73,5 @@ completions still work for both streaming and non-streaming requests; the
 history endpoints report that persistence is not configured (HTTP 501) rather
 than returning an empty list or a 404. Other stores (`responses`, `datasets`,
 `eval`, `files`, `prompts`, `vector_io`) stay enabled, so disabling inference
-persistence is independent of the rest of the storage layer. This follows the
-same optional-store pattern the Responses store already uses; see the storage
+persistence is independent of the rest of the storage layer. See the storage
 module README for details.

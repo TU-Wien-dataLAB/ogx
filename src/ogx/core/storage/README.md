@@ -55,28 +55,16 @@ Storage is configured in `StackConfig.storage` via `StorageConfig`. The `stores`
 
 See `datatypes.py` for all config types and `StorageBackendType` for the enum of supported backends.
 
-### Optional Stores (null to disable)
+### Inference Store (null to disable)
 
-Some store references are optional: setting the reference to `null` (not omitting
-it) means OGX does not construct the store at all, and the API that depends on
-it degrades gracefully. This is an explicit operator choice made in a run config;
-the default for every optional reference remains an enabled reference (except
-`responses`, which defaults to `None`), so existing deployments are unaffected
-unless they opt in.
+Setting the `inference` store reference to `null` explicitly disables Chat
+Completions persistence. Omitting the reference keeps the store enabled for
+backward compatibility.
 
-- **`inference`** -- when `null`, no `InferenceStore` is constructed: no
-  `inference_store` table is created and no background write workers run. Chat
-  completions still work (streaming and non-streaming); the chat completion
-  history endpoints (`list`, `retrieve`, `messages`) report that persistence is
-  not configured (HTTP 501) rather than returning an empty list or a 404.
-- **`responses`** -- the `responses` reference is nullable in the config schema
-  (`default=None`) and `null` passes validation, but unlike `inference` it is not
-  a runtime toggle: the built-in responses provider always constructs and
-  initializes its store from its own `persistence.responses` (a required,
-  non-nullable reference), and the shared `storage.stores.responses` reference
-  is only validated, never consumed at startup. Setting it to `null` is accepted
-  but does not currently disable Responses persistence.
+When disabled, no `InferenceStore` is constructed, no `inference_store` table is
+created, and no background write workers run. Streaming and non-streaming Chat
+Completions continue to work. The history endpoints (`list`, `retrieve`, and
+`messages`) report that persistence is not configured (HTTP 501).
 
-Other stores (`datasets`, `eval`, `files`, `prompts`, `vector_io`) are not
-affected by disabling the inference store, so persistence can be turned off for
-one API independently of the rest of the storage layer.
+Other stores (`responses`, `datasets`, `eval`, `files`, `prompts`, `vector_io`)
+are unaffected by disabling the inference store.

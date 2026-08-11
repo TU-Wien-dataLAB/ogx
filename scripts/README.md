@@ -22,7 +22,6 @@ scripts/
   cleanup_recordings.py        # Remove orphaned test recordings
   diagnose_recordings.py       # Debug test recording issues
   normalize_recordings.py      # Normalize test recordings for consistency
-  gen_inference_store_disabled_recordings.py # Regenerate recordings for the inference-store-disabled integration test
   docker.sh                    # Docker build helper
   install.sh                   # Installation helper
   integration-tests.sh         # Run integration test suite
@@ -67,9 +66,6 @@ uv run python scripts/cleanup_recordings.py
 uv run python scripts/diagnose_recordings.py
 # Normalize recordings
 uv run python scripts/normalize_recordings.py
-# Regenerate recordings for the inference-store-disabled integration test
-# (records against a local mock OpenAI server; isolates the shared recordings dir)
-uv run python scripts/gen_inference_store_disabled_recordings.py
 ```
 
 ### Remote test recording (via GitHub Actions)
