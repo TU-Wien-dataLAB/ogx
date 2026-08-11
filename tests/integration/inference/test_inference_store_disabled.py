@@ -28,14 +28,11 @@ import yaml
 from ogx.core.datatypes import StackConfig
 from ogx.core.library_client import OGXAsLibraryClient
 from ogx.core.stack import get_stack_run_config_from_distro
-
-# A model reachable through the ci-tests routing via the provider fallback path
-# (``provider_id/resource_id``). The completion request against the provider is
-# replayed from a recording, so no live API key is needed.
-TEXT_MODEL = "openai/gpt-4o"
-
-NON_STREAMING_PROMPT = "Say hello."
-STREAMING_PROMPT = "Say hello in one sentence."
+from tests.integration.inference.store_disabled_constants import (
+    NON_STREAMING_PROMPT,
+    STREAMING_PROMPT,
+    TEXT_MODEL,
+)
 
 
 def _build_non_persisting_config(sqlite_dir: str) -> tuple[StackConfig, Path]:
@@ -57,6 +54,12 @@ def non_persisting_client():
     Booted once for the whole session because constructing the ci-tests stack is
     expensive. These tests do not mutate shared client state, so a single shared
     client is safe.
+
+    This deliberately does not use the shared ``ogx_client`` fixture: unlike that
+    fixture it must boot its own stack with a custom store config
+    (``inference: null``), which cannot be expressed through the standard
+    server-mode run config. See ``_boot_library_client`` for how the in-process
+    boot avoids colliding with the outer server-mode OGX server.
     """
     # The OpenAI provider validates that an API key is present before the
     # recording harness short-circuits the request in replay mode. A fake key
@@ -68,12 +71,33 @@ def non_persisting_client():
     config_file = tempfile.NamedTemporaryFile(delete=False, suffix="-run.yaml").name
     with open(config_file, "w") as f:
         yaml.dump(run_config.model_dump(mode="json"), f)
-    client = OGXAsLibraryClient(config_file, skip_logger_removal=True)
+    client = _boot_library_client(config_file)
     try:
         yield client, sql_db
     finally:
         client.shutdown()
         os.unlink(config_file)
+
+
+def _boot_library_client(config_file: str) -> OGXAsLibraryClient:
+    """Boot an in-process library client with the standalone metrics endpoint off.
+
+    ``integration-tests.sh`` exports ``OGX_METRICS_ENDPOINT_ENABLED=1`` so the outer
+    server-mode OGX server exposes a metrics scrape endpoint on port 9464. Booting a
+    second stack in-process would try to bind the same port; nothing scrapes the
+    in-process stack, so the endpoint is turned off for the boot and restored right
+    after so sibling tests in the same pytest process (e.g. the metrics endpoint
+    integration test) still observe the script's flag.
+    """
+    metrics_env = os.environ.get("OGX_METRICS_ENDPOINT_ENABLED")
+    os.environ["OGX_METRICS_ENDPOINT_ENABLED"] = "0"
+    try:
+        return OGXAsLibraryClient(config_file, skip_logger_removal=True)
+    finally:
+        if metrics_env is not None:
+            os.environ["OGX_METRICS_ENDPOINT_ENABLED"] = metrics_env
+        else:
+            os.environ.pop("OGX_METRICS_ENDPOINT_ENABLED", None)
 
 
 def test_non_streaming_chat_completion_without_store(non_persisting_client):
@@ -149,11 +173,7 @@ def test_no_inference_store_table_when_persistence_disabled(non_persisting_clien
 
     conn = sqlite3.connect(str(sql_db))
     try:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='inference_store'"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='inference_store'").fetchall()
     finally:
         conn.close()
-    assert (
-        rows == []
-    ), "inference_store table must not exist when persistence is disabled"
+    assert rows == [], "inference_store table must not exist when persistence is disabled"

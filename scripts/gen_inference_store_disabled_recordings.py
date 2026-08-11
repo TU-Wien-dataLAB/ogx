@@ -34,25 +34,22 @@ import yaml
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
+sys.path.insert(0, REPO_ROOT)
 
 from ogx.core.library_client import OGXAsLibraryClient  # noqa: E402
 from ogx.core.stack import get_stack_run_config_from_distro  # noqa: E402
 from ogx.core.testing_context import set_test_context  # noqa: E402
+from tests.integration.inference.store_disabled_constants import (  # noqa: E402
+    NON_STREAMING_PROMPT,
+    RECORDING_TEST_IDS,
+    STREAMING_PROMPT,
+    TEXT_MODEL,
+)
 
 RECORDINGS_DIR = os.path.join(REPO_ROOT, "tests", "integration", "inference", "recordings")
 
-# The exact prompts the test uses -- the recording hash depends on the body.
-TEXT_MODEL = "openai/gpt-4o"
-NON_STREAMING_PROMPT = "Say hello."
-STREAMING_PROMPT = "Say hello in one sentence."
-
 # pytest node ids the test will use -- the recording hash includes the test id.
-TEST_NODE_IDS = [
-    "tests/integration/inference/test_inference_store_disabled.py::test_non_streaming_chat_completion_without_store",
-    "tests/integration/inference/test_inference_store_disabled.py::test_streaming_chat_completion_without_store",
-    "tests/integration/inference/test_inference_store_disabled.py::test_retrieve_chat_completion_reports_not_configured",
-    "tests/integration/inference/test_inference_store_disabled.py::test_list_chat_completion_messages_reports_not_configured",
-]
+TEST_NODE_IDS = RECORDING_TEST_IDS
 
 MOCK_HOST = "127.0.0.1"
 MOCK_PORT = 0  # ephemeral
@@ -141,7 +138,7 @@ class MockHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
         else:
-            body = _completion_body(model, "Say hello.", completion_id)
+            body = _completion_body(model, NON_STREAMING_PROMPT, completion_id)
             data = json.dumps(body).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
