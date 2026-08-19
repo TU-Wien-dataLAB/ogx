@@ -89,29 +89,31 @@ def test_valid_configuration_passes_validation():
 def test_inference_store_defaults_enabled_when_omitted() -> None:
     """Omitting the `inference` key keeps persistence enabled (backward compatible default).
 
-    The optional typing on `ServerStoresConfig.inference` means `None` is a valid,
-    explicit, opt-in way to disable persistence. The default must remain an enabled
-    reference so that existing deployments that omit the key keep their behavior,
-    and so that a valid non-persisting config is expressed as `inference: null`
-    rather than by deleting the key.
+    Existing deployments that omit the key keep their behavior; a non-persisting
+    config is expressed with `inference.enabled: false` rather than by deleting
+    the key or nulling the reference.
     """
     stores = ServerStoresConfig()
     assert stores.inference is not None
+    assert stores.inference.enabled is True
     assert stores.inference.backend == "sql_default"
     assert stores.inference.table_name == "inference_store"
 
 
-def test_inference_store_none_disables_persistence() -> None:
-    """Setting `inference` to null explicitly opts out of chat completion persistence."""
-    stores = ServerStoresConfig(inference=None)
-    assert stores.inference is None
+def test_inference_store_enabled_false_disables_persistence() -> None:
+    """Setting `inference.enabled` to false opts out of chat completion persistence."""
+    stores = ServerStoresConfig(
+        inference=InferenceStoreReference(backend="sql_default", table_name="inference_store", enabled=False)
+    )
+    assert stores.inference is not None
+    assert stores.inference.enabled is False
 
 
-def test_inference_store_config_omit_vs_null_parsing() -> None:
-    """Lock the omit-vs-null semantics when parsing `ServerStoresConfig`.
+def test_inference_store_enabled_flag_parsing() -> None:
+    """Lock the enabled-flag semantics when parsing `ServerStoresConfig`.
 
-    - `inference` key absent  -> enabled default (persistence on)
-    - `inference: null`       -> disabled (persistence off)
+    - `inference` key absent       -> enabled default (persistence on)
+    - `inference.enabled: false`   -> disabled (persistence off)
     """
     base = ServerStoresConfig().model_dump(mode="python")
 
@@ -120,12 +122,14 @@ def test_inference_store_config_omit_vs_null_parsing() -> None:
     omitted.pop("inference")
     stores_omitted = ServerStoresConfig.model_validate(omitted)
     assert stores_omitted.inference is not None
+    assert stores_omitted.inference.enabled is True
 
-    # Explicitly set inference to null: persistence disabled.
-    explicit_null = dict(base)
-    explicit_null["inference"] = None
-    stores_null = ServerStoresConfig.model_validate(explicit_null)
-    assert stores_null.inference is None
+    # Explicitly disable persistence via the flag.
+    disabled = dict(base)
+    disabled["inference"] = {**base["inference"], "enabled": False}
+    stores_disabled = ServerStoresConfig.model_validate(disabled)
+    assert stores_disabled.inference is not None
+    assert stores_disabled.inference.enabled is False
 
 
 @pytest.mark.parametrize("backend_key", ["kv_default", "sql_default"])

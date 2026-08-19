@@ -18,7 +18,9 @@ STREAMING_PROMPT = "Say hello in one sentence."
 def build_inference_store_disabled_run_config() -> StackConfig:
     """Build the minimal ci-tests configuration used by this test scenario."""
     run_config = get_stack_run_config_from_distro("ci-tests")
-    run_config.storage.stores.inference = None
+    # The ci-tests distribution always configures the inference store; disable
+    # persistence through the explicit flag while keeping the reference valid.
+    run_config.storage.stores.inference.enabled = False
     # Vector-store model validation is unrelated to chat completion persistence
     # and loads the sentence-transformers stack during an in-process boot.
     run_config.vector_stores = None

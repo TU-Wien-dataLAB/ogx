@@ -58,16 +58,17 @@ ogx stack run --config path/to/config.yaml
 By default the `inference` store reference is enabled, so chat completion
 request/response payloads are persisted and the history endpoints (`list`,
 `retrieve`, `messages`) are served from it. An operator can disable that
-persistence for the inference API by setting the reference to `null` in a run
+persistence for the inference API by setting `inference.enabled: false` in a run
 config:
 
 ```yaml
 storage:
   stores:
-    inference: null
+    inference:
+      enabled: false
 ```
 
-When `inference` is `null`, OGX does not construct an `InferenceStore` at all:
+When the store is disabled, OGX does not construct an `InferenceStore` at all:
 no `inference_store` table is created and no background write workers run. Chat
 completions still work for both streaming and non-streaming requests; the
 history endpoints report that persistence is not configured (HTTP 501) rather

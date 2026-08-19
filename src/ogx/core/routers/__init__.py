@@ -61,7 +61,9 @@ async def get_auto_router_impl(
     # TODO: move pass configs to routers instead
     if api == Api.inference:
         inference_ref = run_config.storage.stores.inference
-        if inference_ref is not None:
+        if inference_ref is None:
+            raise ValueError("storage.stores.inference must be configured in run config")
+        if inference_ref.enabled:
             inference_store = InferenceStore(
                 reference=inference_ref,
                 policy=policy,

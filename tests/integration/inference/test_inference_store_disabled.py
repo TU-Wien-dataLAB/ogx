@@ -6,15 +6,16 @@
 
 """Chat Completions behavior when persistence is disabled.
 
-When an operator configures ``storage.stores.inference`` as ``null``, OGX must
-not construct an ``InferenceStore`` at all: no ``inference_store`` table is
-created, no background write workers run, and no chat completion request or
-response payload is ever persisted. Chat completions still work for both
-streaming and non-streaming requests, and the history endpoints report that
-persistence is not configured (501) rather than returning an empty list or 404.
+When an operator disables the inference store
+(``storage.stores.inference.enabled: false``), OGX must not construct an
+``InferenceStore`` at all: no ``inference_store`` table is created, no background
+write workers run, and no chat completion request or response payload is ever
+persisted. Chat completions still work for both streaming and non-streaming
+requests, and the history endpoints report that persistence is not configured
+(501) rather than returning an empty list or 404.
 
 This test builds a ``StackConfig`` from the ``ci-tests`` distribution with the
-inference store reference set to ``null``, boots an in-process library client
+inference store disabled (``enabled: false``), boots an in-process library client
 from it, and exercises the full HTTP path through the OpenAI-compatible client.
 """
 
@@ -48,7 +49,7 @@ def non_persisting_client() -> Generator[NonPersistingClient, None, None]:
 
     This deliberately does not use the shared ``ogx_client`` fixture: unlike that
     fixture it must boot its own stack with a custom store config
-    (``inference: null``), which cannot be expressed through the standard
+    (``inference.enabled: false``), which cannot be expressed through the standard
     server-mode run config. See ``_boot_library_client`` for how the in-process
     boot avoids colliding with the outer server-mode OGX server.
     """

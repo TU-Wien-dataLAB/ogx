@@ -55,11 +55,12 @@ Storage is configured in `StackConfig.storage` via `StorageConfig`. The `stores`
 
 See `datatypes.py` for all config types and `StorageBackendType` for the enum of supported backends.
 
-### Inference Store (null to disable)
+### Inference Store (enabled flag)
 
-Setting the `inference` store reference to `null` explicitly disables Chat
-Completions persistence. Omitting the reference keeps the store enabled for
-backward compatibility.
+Setting `inference.enabled: false` on the inference store reference explicitly
+disables Chat Completions persistence. Omitting the flag (or the whole
+reference) keeps the store enabled for backward compatibility, and setting the
+reference itself to `null` remains a configuration error.
 
 When disabled, no `InferenceStore` is constructed, no `inference_store` table is
 created, and no background write workers run. Streaming and non-streaming Chat
