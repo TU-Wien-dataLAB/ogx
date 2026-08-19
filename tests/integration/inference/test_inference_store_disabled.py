@@ -17,6 +17,8 @@ requests, and the history endpoints report that persistence is not configured
 This test builds a ``StackConfig`` from the ``ci-tests`` distribution with the
 inference store disabled (``enabled: false``), boots an in-process library client
 from it, and exercises the full HTTP path through the OpenAI-compatible client.
+It is gated to library-client sessions (see ``pytestmark`` below): booting an
+in-process stack inside a server-mode session is unsupported.
 """
 
 import os
@@ -35,6 +37,17 @@ from tests.integration.inference.store_disabled_support import (
     TEXT_MODEL,
     build_inference_store_disabled_run_config,
 )
+
+# This test boots its own in-process stack, which must not be mixed into a
+# server-mode session (where the shared ogx_client fixture runs a separate HTTP
+# server and the recorder installs a server-only test-ID patch). Like
+# tests/integration/inspect/test_metrics_endpoint.py, gate on the session's
+# stack-config type so this only runs in library-client sessions.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("OGX_TEST_STACK_CONFIG_TYPE") == "server",
+    reason="Boots an in-process library client; cannot run inside a server-mode session",
+)
+
 
 NonPersistingClient = tuple[OGXAsLibraryClient, Path]
 
